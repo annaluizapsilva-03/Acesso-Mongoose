@@ -17,7 +17,7 @@ const produtos = [
 ].map(([nome, preco, categoria, estoque, fabricante]) => ({ nome, preco, categoria, estoque, descricao: `Produto de exemplo: ${nome}`, fabricante: { nome: fabricante, pais: 'Brasil' } }));
 try {
   await conectarBanco();
-  // Atualiza ou cria pelo nome; não apaga dados de alunos.
+  
   for (const produto of produtos) await Produto.updateOne({ nome: produto.nome }, { $setOnInsert: produto }, { upsert: true });
   console.log('Produtos de exemplo disponíveis:', produtos.length);
 }
