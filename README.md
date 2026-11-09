@@ -71,17 +71,7 @@ Exemplo de corpo para registrar uma venda:
 
 A API recusa a venda se: não tiver nome do cliente, não tiver itens, o ID do produto for inválido ou não existir, ou a quantidade não for um número inteiro maior que 0.
 
-### Relatório
-`GET /api/relatorios/vendas`
 
-Mostra:
-- quantidade de vendas
-- unidades vendidas
-- faturamento total
-- ticket médio
-- produtos mais vendidos (por padrão os 5 primeiros; dá para mudar com `?limite=3`)
-
-O faturamento usa o `precoUnitario` guardado em cada venda, e não o preço atual do produto.
 
 ## Testando o preço histórico
 
