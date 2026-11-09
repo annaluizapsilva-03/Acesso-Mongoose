@@ -1,153 +1,97 @@
-# API de Produtos e Vendas — MongoDB Atlas + Mongoose + Express
+# API de Produtos e Vendas
 
-API REST em Node.js que gerencia **produtos** e **vendas**, relacionando os dois por referência (`ObjectId`), preservando o **preço histórico** de cada venda e gerando um **relatório consolidado**.
+Projeto da atividade de NoSQL. É uma API feita com Node.js, Express, Mongoose e MongoDB Atlas para cadastrar produtos, registrar vendas e gerar um relatório.
 
-## Requisitos
+## Como rodar
 
-- Node.js 20 ou superior
-- Uma conta no [MongoDB Atlas](https://www.mongodb.com/atlas) com um cluster (o plano gratuito é suficiente)
+1. Instale o Node.js (versão 20 ou mais nova).
+2. Crie um cluster no MongoDB Atlas, um usuário de banco e libere o seu IP em *Network Access*.
+3. Copie a string de conexão do Atlas (Connect → Drivers).
+4. Copie o arquivo `.env.example` para `.env` e coloque a sua string em `MONGODB_URI`:
 
-## Configuração
+```
+PORT=3000
+MONGODB_URI=mongodb+srv://USUARIO:SENHA@CLUSTER.mongodb.net/nosql_lab?retryWrites=true&w=majority
+```
 
-1. No Atlas, em **Database Access**, crie um usuário de banco de dados.
-2. Em **Network Access**, autorize o IP da sua máquina.
-3. Em **Connect → Drivers**, copie a URI de conexão. Se a senha tiver caracteres especiais, codifique-os na URI (ex.: `@` vira `%40`).
-4. Crie o arquivo `.env` a partir do exemplo e preencha `MONGODB_URI`:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   ```env
-   PORT=3000
-   MONGODB_URI=mongodb+srv://USUARIO:SENHA@CLUSTER.mongodb.net/nosql_lab?retryWrites=true&w=majority
-   ```
-
-   > O `.env` contém credenciais e **não deve ser versionado nem enviado**.
-
-## Executando
+5. No terminal, rode:
 
 ```bash
 npm install
-npm run seed   
-npm run dev    
+npm run seed
+npm run dev
 ```
 
-Verifique em `GET http://localhost:3000/api/health`. O arquivo `requests.http` reúne exemplos de todas as chamadas (extensão *REST Client* do VS Code; também pode ser usado como referência no Postman).
+O `npm run seed` cadastra alguns produtos de exemplo (pode pular se quiser cadastrar na mão).
 
-## Modelagem
+Para ver se funcionou, abra `http://localhost:3000/api/health`.
 
-### Produto (`src/models/Produto.js`)
-Coleção `produtos`: `nome`, `descricao`, `preco`, `categoria`, `estoque`, `fabricante { nome, pais }`.
+## Como funciona
 
-### Venda (`src/models/Venda.js`)
-Coleção `vendas`:
+**Produto:** nome, descrição, preço, categoria, estoque e fabricante.
 
-```js
-{
-  cliente: { nome, email },
-  data: Date,                       
-  itens: [{
-    produto: ObjectId (ref 'Produto'),   
-    quantidade: Number,                  
-    precoUnitario: Number                
-  }],
-  total: Number                     
-}
-```
+**Venda:** tem o cliente, a data e uma lista de itens. Cada item tem:
+- `produto`: o ID do produto (referência, `ObjectId`)
+- `quantidade`
+- `precoUnitario`: o preço do produto **na hora da venda**
 
-**Decisões de modelagem**
+Por isso, se o preço do produto mudar depois, as vendas antigas continuam com o preço que foi cobrado na época. O preço é copiado do banco pelo servidor, então o preço enviado pelo cliente é ignorado.
 
-- **Itens incorporados + produto referenciado.** Os itens só fazem sentido dentro da venda e sempre são lidos junto com ela, então ficam *embutidos* no documento. Já o produto tem vida própria (é editado e consultado separadamente), então é *referenciado* por `ObjectId` e recuperado com `populate('itens.produto')`.
-- **Histórico de preços.** No registro da venda, o servidor busca cada produto no banco e **copia o preço atual** para `precoUnitario`. Alterar o preço do produto depois não afeta vendas já feitas. Qualquer preço enviado pelo cliente na requisição é **ignorado**.
-- **Total derivado.** `total` é recalculado a cada validação a partir dos itens, nunca recebido do cliente.
+O `total` da venda é calculado automaticamente (quantidade × preço unitário de cada item).
 
-## Endpoints
+## Rotas
 
 ### Produtos
-| Método | Rota | Descrição |
+| Método | Rota | O que faz |
 |---|---|---|
-| GET | `/api/health` | Status da conexão com o MongoDB |
-| GET | `/api/produtos` | Lista produtos |
-| GET | `/api/produtos/:id` | Detalha um produto |
-| POST | `/api/produtos` | Cadastra produto |
-| PUT | `/api/produtos/:id` | Atualiza produto |
-| DELETE | `/api/produtos/:id` | Exclui produto |
+| GET | `/api/produtos` | lista os produtos |
+| GET | `/api/produtos/:id` | busca um produto |
+| POST | `/api/produtos` | cadastra um produto |
+| PUT | `/api/produtos/:id` | atualiza um produto |
+| DELETE | `/api/produtos/:id` | exclui um produto |
 
 ### Vendas
-| Método | Rota | Descrição |
+| Método | Rota | O que faz |
 |---|---|---|
-| POST | `/api/vendas` | Registra uma venda |
-| GET | `/api/vendas` | Lista vendas (mais recentes primeiro) com `populate` dos produtos |
-| GET | `/api/vendas/:id` | Detalha uma venda com `populate` dos produtos |
+| POST | `/api/vendas` | registra uma venda |
+| GET | `/api/vendas` | lista as vendas (com os dados dos produtos, usando `populate`) |
+| GET | `/api/vendas/:id` | busca uma venda |
 
-Filtros opcionais em `GET /api/vendas`: `?cliente=ana` (busca parcial, sem diferenciar maiúsculas), `?de=2026-01-01&ate=2026-12-31`.
-
-**Exemplo — registrar venda**
-
-```http
-POST /api/vendas
-Content-Type: application/json
-
-{
-  "cliente": { "nome": "Ana Souza", "email": "ana@exemplo.com" },
-  "itens": [
-    { "produto": "<ID_DO_PRODUTO_1>", "quantidade": 2 },
-    { "produto": "<ID_DO_PRODUTO_2>", "quantidade": 1 }
-  ]
-}
-```
-
-Validações (resposta `400`, ou `404` para produto inexistente): nome do cliente obrigatório, ao menos um item, `produto` com ID válido, `quantidade` inteira ≥ 1 e produto existente no catálogo. Itens repetidos do mesmo produto são agrupados somando as quantidades.
-
-### Relatório consolidado
-
-`GET /api/relatorios/vendas`
-
-Parâmetros opcionais: `de`, `ate` (datas ISO) e `limite` (quantidade de produtos no ranking; padrão 5, máximo 50).
+Exemplo de corpo para registrar uma venda:
 
 ```json
 {
-  "periodo": { "de": null, "ate": null },
-  "quantidadeVendas": 2,
-  "unidadesVendidas": 7,
-  "faturamentoTotal": 2520.5,
-  "ticketMedio": 1260.25,
-  "produtosMaisVendidos": [
-    { "produtoId": "...", "nome": "Mouse", "categoria": "Acessórios", "unidadesVendidas": 4, "faturamento": 340 }
+  "cliente": { "nome": "Ana Souza", "email": "ana@exemplo.com" },
+  "itens": [
+    { "produto": "ID_DO_PRODUTO_1", "quantidade": 2 },
+    { "produto": "ID_DO_PRODUTO_2", "quantidade": 1 }
   ]
 }
 ```
 
-O relatório usa o *aggregation pipeline* do MongoDB (`$match`, `$facet`, `$unwind`, `$group`, `$lookup`). O faturamento é calculado com o **`precoUnitario` gravado na venda**, e não com o preço atual do produto. Os produtos são ordenados por unidades vendidas (desempate por faturamento). Se um produto vendido tiver sido excluído do catálogo, ele aparece como `(produto removido)`, e os valores continuam corretos.
+A API recusa a venda se: não tiver nome do cliente, não tiver itens, o ID do produto for inválido ou não existir, ou a quantidade não for um número inteiro maior que 0.
 
-## Como verificar o histórico de preços
+### Relatório
+`GET /api/relatorios/vendas`
 
-1. Cadastre um produto com `preco: 80` e registre uma venda dele.
-2. Altere o produto: `PUT /api/produtos/:id` com `{ "preco": 100 }`.
-3. Registre uma segunda venda do mesmo produto.
-4. Em `GET /api/vendas`, a primeira venda continua com `precoUnitario: 80` e a segunda com `100`, enquanto `produto.preco` (populado) mostra 100 nas duas. O relatório soma 80 e 100 conforme cada venda.
+Mostra:
+- quantidade de vendas
+- unidades vendidas
+- faturamento total
+- ticket médio
+- produtos mais vendidos (por padrão os 5 primeiros; dá para mudar com `?limite=3`)
 
-## Estrutura
+O faturamento usa o `precoUnitario` guardado em cada venda, e não o preço atual do produto.
 
-```
-src/
-  app.js                         # Express e rotas
-  server.js                      # inicialização
-  config/database.js             # conexão com o Atlas
-  models/Produto.js
-  models/Venda.js
-  controllers/produtoController.js
-  controllers/vendaController.js
-  controllers/relatorioController.js
-  routes/produtoRoutes.js
-  routes/vendaRoutes.js
-  routes/relatorioRoutes.js
-  utils/httpErro.js              # tratamento de erros e arredondamento
-scripts/seed.js                  # produtos de exemplo
-requests.http                    # exemplos de requisições
-```
+## Testando o preço histórico
 
-## Limitações conhecidas (fora do escopo)
+1. Cadastre um produto com preço 80 e faça uma venda dele.
+2. Mude o preço dele para 100 (`PUT /api/produtos/:id`).
+3. Faça outra venda do mesmo produto.
+4. Em `GET /api/vendas`, a primeira venda continua com `precoUnitario` 80 e a segunda com 100.
 
-Controle de estoque, transações multi-documento, autenticação, concorrência e políticas para excluir produtos já vendidos não foram implementados. Em produção, seria recomendável tratar esses pontos (por exemplo, "arquivar" produtos em vez de excluí-los).
+Tem exemplos prontos de todas as requisições no arquivo `requests.http`.
+
+
+
+
