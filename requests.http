@@ -1,0 +1,65 @@
+# Requer a extensão "REST Client" (VS Code). Execute as requisições em ordem.
+@base = http://localhost:3000
+
+### Health
+GET {{base}}/api/health
+
+### Listar produtos
+GET {{base}}/api/produtos
+
+### Criar produto 1
+# @name produto1
+POST {{base}}/api/produtos
+Content-Type: application/json
+
+{"nome":"Cabo HDMI","preco":35,"categoria":"Acessórios","estoque":20}
+
+### Criar produto 2
+# @name produto2
+POST {{base}}/api/produtos
+Content-Type: application/json
+
+{"nome":"Mouse sem fio","preco":80,"categoria":"Acessórios","estoque":50}
+
+### Registrar venda (o preço vem do catálogo; qualquer precoUnitario enviado é ignorado)
+# @name venda1
+POST {{base}}/api/vendas
+Content-Type: application/json
+
+{
+  "cliente": { "nome": "Ana Souza", "email": "ana@exemplo.com" },
+  "itens": [
+    { "produto": "{{produto1.response.body._id}}", "quantidade": 2 },
+    { "produto": "{{produto2.response.body._id}}", "quantidade": 1 }
+  ]
+}
+
+### Alterar o preço do produto 2 (a venda anterior NÃO muda)
+PUT {{base}}/api/produtos/{{produto2.response.body._id}}
+Content-Type: application/json
+
+{"preco":100}
+
+### Registrar segunda venda (já com o novo preço)
+POST {{base}}/api/vendas
+Content-Type: application/json
+
+{
+  "cliente": { "nome": "Bruno Lima" },
+  "itens": [ { "produto": "{{produto2.response.body._id}}", "quantidade": 3 } ]
+}
+
+### Listar vendas (populate dos produtos)
+GET {{base}}/api/vendas
+
+### Filtrar vendas por cliente e período
+GET {{base}}/api/vendas?cliente=ana&de=2026-01-01&ate=2026-12-31
+
+### Detalhar uma venda
+GET {{base}}/api/vendas/{{venda1.response.body._id}}
+
+### Relatório consolidado
+GET {{base}}/api/relatorios/vendas
+
+### Relatório: top 3 produtos em um período
+GET {{base}}/api/relatorios/vendas?limite=3&de=2026-01-01
